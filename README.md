@@ -2,6 +2,7 @@
 
 **Pipeline to analyze beta-tubulin gene of Trichuris Trichiura, and call nucleotide and amino acid mutations on coding and non-coding regions, separately**.
 Performs:
+
 - Quality Control and Filter (Trimmomatic)
 - Alignment over reference sequence
 - Full-reference nucleotide consensus calling based on python/samtools and defined criteria
