@@ -1,0 +1,19 @@
+##sequence-region AF034219.1 1 2482
+##species https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=36087
+AF034219.1	Genbank	region	1	2482	.	+	.	ID=AF034219.1:1..2482;Dbxref=taxon:36087;gbkey=Src;mol_type=genomic DNA
+AF034219.1	Genbank	mRNA	1	2482	.	+	.	ID=rna-AF034219.1:1..2482;end_range=2482,.;gbkey=mRNA;partial=true;product=beta tubulin;start_range=.,1
+AF034219.1	Genbank	exon	1	355	.	+	.	ID=exon-AF034219.1:1..2482-1;Parent=rna-AF034219.1:1..2482;gbkey=mRNA;partial=true;product=beta tubulin;start_range=.,1
+AF034219.1	Genbank	exon	650	869	.	+	.	ID=exon-AF034219.1:1..2482-2;Parent=rna-AF034219.1:1..2482;gbkey=mRNA;partial=true;product=beta tubulin
+AF034219.1	Genbank	exon	922	1166	.	+	.	ID=exon-AF034219.1:1..2482-3;Parent=rna-AF034219.1:1..2482;gbkey=mRNA;partial=true;product=beta tubulin
+AF034219.1	Genbank	exon	1213	1662	.	+	.	ID=exon-AF034219.1:1..2482-4;Parent=rna-AF034219.1:1..2482;gbkey=mRNA;partial=true;product=beta tubulin
+AF034219.1	Genbank	exon	1712	1898	.	+	.	ID=exon-AF034219.1:1..2482-5;Parent=rna-AF034219.1:1..2482;gbkey=mRNA;partial=true;product=beta tubulin
+AF034219.1	Genbank	exon	1953	2482	.	+	.	ID=exon-AF034219.1:1..2482-6;Parent=rna-AF034219.1:1..2482;end_range=2482,.;gbkey=mRNA;partial=true;product=beta tubulin
+AF034219.1	Genbank	CDS	299	355	.	+	0	ID=cds-AAB99949.1;Parent=rna-AF034219.1:1..2482;Dbxref=NCBI_GP:AAB99949.1;Name=AAB99949.1;gbkey=CDS;product=beta tubulin;protein_id=AAB99949.1
+AF034219.1	Genbank	CDS	650	869	.	+	0	ID=cds-AAB99949.1;Parent=rna-AF034219.1:1..2482;Dbxref=NCBI_GP:AAB99949.1;Name=AAB99949.1;gbkey=CDS;product=beta tubulin;protein_id=AAB99949.1
+AF034219.1	Genbank	CDS	922	1166	.	+	2	ID=cds-AAB99949.1;Parent=rna-AF034219.1:1..2482;Dbxref=NCBI_GP:AAB99949.1;Name=AAB99949.1;gbkey=CDS;product=beta tubulin;protein_id=AAB99949.1
+AF034219.1	Genbank	CDS	1213	1662	.	+	0	ID=cds-AAB99949.1;Parent=rna-AF034219.1:1..2482;Dbxref=NCBI_GP:AAB99949.1;Name=AAB99949.1;gbkey=CDS;product=beta tubulin;protein_id=AAB99949.1
+AF034219.1	Genbank	CDS	1712	1898	.	+	0	ID=cds-AAB99949.1;Parent=rna-AF034219.1:1..2482;Dbxref=NCBI_GP:AAB99949.1;Name=AAB99949.1;gbkey=CDS;product=beta tubulin;protein_id=AAB99949.1
+AF034219.1	Genbank	CDS	1953	2128	.	+	2	ID=cds-AAB99949.1;Parent=rna-AF034219.1:1..2482;Dbxref=NCBI_GP:AAB99949.1;Name=AAB99949.1;gbkey=CDS;product=beta tubulin;protein_id=AAB99949.1
+AF034219.1	Genbank	five_prime_UTR	1	298	.	+	.	ID=id-AF034219.1:1..298;gbkey=5'UTR;partial=true;start_range=.,1
+AF034219.1	Genbank	three_prime_UTR	2129	2482	.	+	.	ID=id-AF034219.1:2129..2482;gbkey=3'UTR
+
