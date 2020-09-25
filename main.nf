@@ -666,8 +666,8 @@ if (!params.skip_adapter_trimming) {
             IN_READS='${sample}.fastq.gz'
             OUT_READS='${sample}.trim.fastq.gz'
             trimmomatic SE -threads $task.cpus -phred33 \${IN_READS} \${OUT_READS} \\
-                ILLUMINACLIP:/opt/conda/envs/trichiura-1.0a/share/trimmomatic-0.39-1/adapters/TruSeq3-SE.fa:2:30:10 \\
-                LEADING:30 TRAILING:30 MINLEN:75 SLIDINGWINDOW:30:20 2> ${sample}.trimmomatic.log
+                ILLUMINACLIP:SE.fa:2:30:10 -si,,aru ${sample}_tirmmomatic_summary.txt \\
+                LEADING:20 TRAILING:20 MINLEN:50 SLIDINGWINDOW:5:20 2> ${sample}.trimmomatic.log
             
             fastqc --quiet *.trim.fastq.gz
         else
@@ -677,8 +677,8 @@ if (!params.skip_adapter_trimming) {
             OUT_READS='${sample}_1.trim.fastq.gz ${sample}_1.fail.fastq.gz ${sample}_2.trim.fastq.gz ${sample}_2.fail.fastq.gz'
             
             trimmomatic PE -threads $task.cpus -phred33 \${IN_READS} \${OUT_READS} \\
-                ILLUMINACLIP:/opt/conda/envs/trichiura-1.0a/share/trimmomatic-0.39-1/adapters/TruSeq3-PE.fa:2:30:10 \\
-                LEADING:30 TRAILING:30 MINLEN:75 SLIDINGWINDOW:30:20 2> ${sample}.trimmomatic.log
+                ILLUMINACLIP:SE.fa:2:30:10 -si,,aru ${sample}_tirmmomatic_summary.txt \\
+                LEADING:20 TRAILING:20 MINLEN:50 SLIDINGWINDOW:5:20 2> ${sample}.trimmomatic.log
             
             fastqc --quiet *.trim.fastq.gz
         fi
