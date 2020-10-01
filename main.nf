@@ -41,6 +41,15 @@ def helpMessage() {
     Read trimming
       --skip_adapter_trimming [bool]    Skip the adapter trimming step with trimmomatic (Default: false)
       --save_trimmed [bool]             Save the trimmed FastQ files in the results directory (Default: false)
+      --leading [int]                   Cut bases off the start of a read, if below a threshold quality (Default: 30)
+      --trailing [int]                  Cut bases off the end of a read, if below a threshold quality (Default: 30)
+      --minlen [int]                    Drop the read if it is below a specified length (Default: 75)
+      --sliding_window [int]            Perform a sliding window trimming, cutting once the average quality within the window falls below a threshold (Default: 30)
+      --sliding_window_quality [int]    Average quality for sliding window trimming (Default: 20)
+      --illclip_misamtch [int]          Specifies the maximum mismatch count which will still allow a full match to be performed (Default: 2)
+      --illclip_pal_thres[int]          Specifies how accurate the match between the two 'adapter ligated' reads must be for PE palindrome read alignment (Default: 30)
+      --illclip_simple_thres [int]      Specifies how accurate the match between any adapter etc. sequence must be against a read (Default: 10)
+      --adapter_type [str]              Specifies adapters used (Default: Nextera) (Options: Nextera, TruSeq2, TruSeq3)
 
     Variant calling
       --callers [str]                   Specify which variant calling algorithms you would like to use (Default: 'varscan2,ivar,bcftools')
@@ -68,6 +77,8 @@ def helpMessage() {
       --skip_variants_quast [bool]      Skip generation of QUAST aggregated report for consensus sequences (Default: false)
       --skip_variants [bool]            Skip variant calling steps in the pipeline (Default: false)
       --skip_codfreq [bool]             Skip codon usage calling steps in the pipeline (Default: false)
+      --custom_consensus_thres [int]    Minimum base frequency on custom consensus (Default: 0.15)
+
 
     QC
       --skip_fastqc [bool]              Skip FastQC (Default: false)
@@ -209,6 +220,15 @@ if (params.save_sra_fastq)           summary['Save SRA FastQ'] = params.save_sra
 if (params.skip_sra)                 summary['Skip SRA Download'] = params.skip_sra
 if (!params.skip_adapter_trimming)  {
     summary['Adapter trimming with'] = 'trimmomatic'
+    if (params.leading)                 summary['Trimm Leading'] = params.leading
+    if (params.trailing)                summary['Trimm Trailing'] = params.trailing
+    if (params.minlen)                  summary['Trimm Min Length'] = params.minlen
+    if (params.sliding_window)          summary['Trimm Sliding wind'] = params.sliding_window
+    if (params.sliding_window_quality)  summary['Trimm Sliding wind Q'] = params.sliding_window_quality
+    if (params.illclip_misamtch)        summary['Trimm Mismatch'] = params.illclip_misamtch
+    if (params.illclip_pal_thres)       summary['Trimm Pal Thres'] = params.illclip_pal_thres
+    if (params.illclip_simple_thres)    summary['Trimm Simple Thres'] = params.illclip_simple_thres
+    if (params.adapter_type)            summary['Trimm Adapter Type'] = params.adapter_type
 } else {
     summary['Skip Adapter Trimming'] = 'Yes'
 }
@@ -237,6 +257,11 @@ if (!params.skip_variants) {
     if (params.skip_variants_quast)  summary['Skip Variants QUAST'] = 'Yes'
 } else {
     summary['Skip Variant Calling']  = 'Yes'
+}
+if (params.skip_codfreq) {
+    summary['Codon Frquency'] = 'No'
+} else {
+    summary['Codon Frequency'] = 'Yes'
 }
 if (params.skip_fastqc)              summary['Skip FastQC'] = 'Yes'
 if (params.skip_multiqc)             summary['Skip MultiQC'] = 'Yes'
@@ -666,9 +691,13 @@ if (!params.skip_adapter_trimming) {
             IN_READS='${sample}.fastq.gz'
             OUT_READS='${sample}.trim.fastq.gz'
             trimmomatic SE -threads $task.cpus -phred33 \${IN_READS} \${OUT_READS} \\
-                ILLUMINACLIP:SE.fa:2:30:10 -si,,aru ${sample}_tirmmomatic_summary.txt \\
-                LEADING:20 TRAILING:20 MINLEN:50 SLIDINGWINDOW:5:20 2> ${sample}.trimmomatic.log
-            
+            ILLUMINACLIP:/opt/conda/envs/nf-core-viralrecon-1.1.0/share/trimmomatic-0.39-1/adapters/TruSeq3-SE.fa:${params.illclip_misamtch}:${params.illclip_misamtch}:${params.illclip_simple_thres} \\
+            LEADING:$params.leading \\
+            TRAILING:$params.trailing \\
+            MINLEN:$params.minlen \\
+            SLIDINGWINDOW:${params.sliding_window}:${params.sliding_window_quality} \\
+            2> ${sample}.trimmomatic.log
+
             fastqc --quiet *.trim.fastq.gz
         else
             [ ! -f  ${sample}_1.fastq.gz ] && ln -s ${reads[0]} ${sample}_1.fastq.gz
@@ -677,9 +706,13 @@ if (!params.skip_adapter_trimming) {
             OUT_READS='${sample}_1.trim.fastq.gz ${sample}_1.fail.fastq.gz ${sample}_2.trim.fastq.gz ${sample}_2.fail.fastq.gz'
             
             trimmomatic PE -threads $task.cpus -phred33 \${IN_READS} \${OUT_READS} \\
-                ILLUMINACLIP:SE.fa:2:30:10 -si,,aru ${sample}_tirmmomatic_summary.txt \\
-                LEADING:20 TRAILING:20 MINLEN:50 SLIDINGWINDOW:5:20 2> ${sample}.trimmomatic.log
-            
+            ILLUMINACLIP:/opt/conda/envs/nf-core-viralrecon-1.1.0/share/trimmomatic-0.39-1/adapters/${params.adapter_type}-PE.fa:${params.illclip_misamtch}:${params.illclip_misamtch}:${params.illclip_simple_thres} \\
+            LEADING:$params.leading \\
+            TRAILING:$params.trailing \\
+            MINLEN:$params.minlen \\
+            SLIDINGWINDOW:${params.sliding_window}:${params.sliding_window_quality} \\
+            2> ${sample}.trimmomatic.log
+         
             fastqc --quiet *.trim.fastq.gz
         fi
         """
@@ -700,7 +733,7 @@ if (!params.skip_adapter_trimming) {
 ///////////////////////////////////////////////////////////////////////////////
 
 /*
- * PREPROCESSING: Build Bowtie2 index for Trichiura genome
+ * PREPROCESSING: Build Bowtie2 index for viral genome
  */
 process BOWTIE2_INDEX {
     tag "$fasta"
@@ -787,7 +820,6 @@ process BOWTIE2 {
     """
     bowtie2 \\
         --threads $task.cpus \\
-        --local \\
         --very-sensitive-local \\
         -x ${index}/${index_base} \\
         $input_reads \\
@@ -937,7 +969,8 @@ if (params.skip_markduplicates) {
                 ch_markdup_bam_varscan2_consensus
                 ch_markdup_bam_bcftools
                 ch_markdup_bam_bcftools_consensus
-                ch_markdup_bam_codfreq }
+                ch_markdup_bam_codfreq 
+                ch_markdup_bam_custom_consensus }
     ch_markdup_bam_flagstat_mqc = Channel.empty()
     ch_markdup_bam_metrics_mqc = Channel.empty()
 } else {
@@ -968,7 +1001,8 @@ if (params.skip_markduplicates) {
                                                                                 ch_markdup_bam_varscan2_consensus,
                                                                                 ch_markdup_bam_bcftools,
                                                                                 ch_markdup_bam_bcftools_consensus,
-                                                                                ch_markdup_bam_codfreq
+                                                                                ch_markdup_bam_codfreq,
+                                                                                ch_markdup_bam_custom_consensus
         path "*.{flagstat,idxstats,stats}" into ch_markdup_bam_flagstat_mqc
         path "*.txt" into ch_markdup_bam_metrics_mqc
 
@@ -1820,30 +1854,75 @@ if (!params.skip_variants && callers.size() > 2) {
 }
 
 ////////////////////////////////////////////////////
+/* --             CUSTOM CONSENSUS             -- */
+////////////////////////////////////////////////////
+
+process CUSTOM_CONSENSUS {
+    tag "$sample"
+    label "process_medium"
+    publishDir "${params.outdir}/variants/custom_consensus", mode: params.publish_dir_mode
+    
+    when:
+    !params.skip_variants
+    
+    input: 
+    tuple val(sample), val(single_end), path(bam) from ch_markdup_bam_custom_consensus
+
+    output:
+    path "*.fa"
+
+    script:
+    """ 
+    consensusSequence_v2.py ${bam[0]} $params.custom_consensus_thres > ${sample}_custom_consensus.fa
+    """  
+}
+////////////////////////////////////////////////////
 /* --                 CODFREQ                  -- */
 ////////////////////////////////////////////////////
+
+/*
+ * PREPROCESSING: Reformat codfreq gff3 file
+ */
+process PREPRO_CODFREQ_GFF {
+    tag "$gff"
+    publishDir "${params.outdir}/variants/codfreq", mode: params.publish_dir_mode
+
+    when:
+    !params.skip_codfreq && !params.skip_variants && params.gff
+
+    input:
+    path gff from ch_gff
+
+    output:
+    path "*.csv" into ch_prepro_gff
+
+    script: 
+    """
+    preprocess_codfreq_gff.r $gff
+    """
+}
 
 /*
  * STEP 5.9: Extract codon frequency with codfreq 
  */
 process CODFREQ {
     tag "$sample"
-    label 'proceess_medium'
+    label 'process_medium'
     publishDir "${params.outdir}/variants/codfreq", mode: params.publish_dir_mode
 
     when:
-    !skip_codfreq
+    !params.skip_codfreq && !params.skip_variants && params.gff
 
     input:
     tuple val(sample), val(single_end), path(bam) from ch_markdup_bam_codfreq
-    path gff from ch_gff
+    each input from ch_prepro_gff
 
     output:
     path "*.codfreq"
 
     script:
     """
-    bam2codfreq.R ${bam[0]} ${gff} ${sample}.codfreq
+    sam2codfreq.py ${bam[0]} $input $task.cpus ${sample}_${input.baseName.replaceAll('codfreq_gff_', '')}.codfreq
     """
 }
 
