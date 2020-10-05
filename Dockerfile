@@ -1,5 +1,5 @@
 FROM nfcore/base:1.9
-LABEL authors="Francesc Catala Moll" \
+LABEL authors="Francesc Catala Moll & Marc Noguera" \
       description="Docker image containing all software requirements for the  MicrobialGenomics/TTrichiura_Tubulin pipeline"
 
 # Install the conda environment
