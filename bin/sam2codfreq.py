@@ -12,7 +12,7 @@ from collections import defaultdict, Counter
 
 df = pd.read_csv(sys.argv[2], delimiter=',')
 
-REF_CODON_OFFSET = int(df.iloc[0]['offset']) 
+REF_CODON_OFFSET = abs(int(df.iloc[0]['offset'])) 
 
 df = df.drop(columns = ['offset'])
 GENE_AA_RANGE = [list(row) for row in df.values]
