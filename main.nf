@@ -1915,7 +1915,7 @@ process CODFREQ {
 
     input:
     tuple val(sample), val(single_end), path(bam) from ch_markdup_bam_codfreq
-    each input from ch_prepro_gff
+    each path(input) from ch_prepro_gff
 
     output:
     path "*.codfreq"
