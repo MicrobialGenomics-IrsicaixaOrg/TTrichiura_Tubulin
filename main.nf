@@ -78,7 +78,13 @@ def helpMessage() {
       --skip_variants [bool]            Skip variant calling steps in the pipeline (Default: false)
       --skip_codfreq [bool]             Skip codon usage calling steps in the pipeline (Default: false)
       --custom_consensus_thres [int]    Minimum base frequency on custom consensus (Default: 0.15)
-
+    
+    Kraken2
+      --kraken2_db [file]               Full path to Kraken2 database built from host genome (Default: kraken2_human.tar.gz hosted on Zenodo)
+      --kraken2_db_name [str]           Name of host genome for building Kraken2 database (Default: 'human')
+      --kraken2_use_ftp [bool]          Use FTP instead of rsync when building kraken2 databases (Default: false)
+      --save_kraken2_fastq [bool]       Save the host and viral fastq files in the results directory (Default: true)
+      --skip_kraken2 [bool]             Skip Kraken2 process for removing host classified reads (Default: false)
 
     QC
       --skip_fastqc [bool]              Skip FastQC (Default: false)
@@ -263,6 +269,14 @@ if (params.skip_codfreq) {
 } else {
     summary['Codon Frequency'] = 'Yes'
 }
+if (!params.skip_kraken2) {
+    if (params.kraken2_db)           summary['Host Kraken2 DB'] = params.kraken2_db
+    if (params.kraken2_db_name)      summary['Host Kraken2 Name'] = params.kraken2_db_name
+    if (params.kraken2_use_ftp)      summary['Kraken2 Use FTP'] = params.kraken2_use_ftp
+    if (params.save_kraken2_fastq)   summary['Save Kraken2 FastQ'] = params.save_kraken2_fastq
+} else {
+    summary['Skip Kraken2']          = 'Yes'
+}
 if (params.skip_fastqc)              summary['Skip FastQC'] = 'Yes'
 if (params.skip_multiqc)             summary['Skip MultiQC'] = 'Yes'
 summary['Max Resources']             = "$params.max_memory memory, $params.max_cpus cpus, $params.max_time time per job"
@@ -371,6 +385,35 @@ if (params.gff) {
 } else {
     //See: https://nextflow-io.github.io/patterns/index.html#_optional_input
     ch_gff = file('NO_FILE')
+}
+
+/*
+ * PREPROCESSING: Uncompress Kraken2 database
+ */
+if (!params.skip_kraken2 && params.kraken2_db) {
+    file(params.kraken2_db, checkIfExists: true)
+    if (params.kraken2_db.endsWith('.tar.gz')) {
+        process UNTAR_KRAKEN2_DB {
+            label 'error_retry'
+            if (params.save_reference) {
+                publishDir "${params.outdir}/genome", mode: params.publish_dir_mode
+            }
+
+            input:
+            path db from params.kraken2_db
+
+            output:
+            path "$untar" into ch_kraken2_db
+
+            script:
+            untar = db.toString() - '.tar.gz'
+            """
+            tar -xvf $db
+            """
+        }
+    } else {
+        ch_kraken2_db = file(params.kraken2_db)
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -678,7 +721,8 @@ if (!params.skip_adapter_trimming) {
         tuple val(sample), val(single_end), path(reads) from ch_cat_trimmomatic
 
         output:
-        tuple val(sample), val(single_end), path("*.trim.fastq.gz") into ch_trimmomatic_bowtie2
+        tuple val(sample), val(single_end), path("*.trim.fastq.gz") into ch_trimmomatic_bowtie2,
+                                                                         ch_trimmomatic_kraken2
         path "*.log" into ch_trimmomatic_mqc
         path "*_fastqc.{zip,html}" into ch_trimmomatic_fastqc_mqc
         path "*.fail.fastq.gz" optional true   
@@ -719,7 +763,8 @@ if (!params.skip_adapter_trimming) {
     }    
 } else {
     ch_cat_trimmomatic
-        .into { ch_trimmomatic_bowtie2 }
+        .into { ch_trimmomatic_bowtie2 
+                ch_trimmomatic_kraken2 }
     ch_trimmomatic_mqc = Channel.empty()
     ch_trimmomatic_fastqc_mqc = Channel.empty()
 }
@@ -1881,9 +1926,9 @@ process CUSTOM_CONSENSUS {
 	fgrep -v ">" ${sample}_custom_consensus.fa >> tmp
 	mv tmp ${sample}_custom_consensus.fa
 
-    gffread -W -x ${sample}_consensus_cds.fasta -g ${sample}_custom_consensus.fa $gff
+    gffread -W -x ${sample}_consensus_cds.fa -g ${sample}_custom_consensus.fa $gff
 
-    seqkit translate --quiet ${sample}_consensus_cds.fasta -o ${sample}_consensus_cds.faa
+    seqkit translate --quiet ${sample}_consensus_cds.fa -o ${sample}_consensus_cds.faa
     """
 }
 
@@ -1934,6 +1979,91 @@ process CODFREQ {
     script:
     """
     sam2codfreq.py ${bam[0]} $input $task.cpus ${sample}_${input.baseName.replaceAll('codfreq_gff_', '')}.codfreq
+    """
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+/* --                                                                     -- */
+/* --                    DENOVO ASSEMBLY PROCESSES                        -- */
+/* --                                                                     -- */
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+/*
+ * PREPROCESSING: Build Kraken2 database for host genome
+ */
+if (!isOffline()) {
+    if (!params.skip_kraken2 && !params.kraken2_db) {
+        if (!params.kraken2_db_name) { exit 1, "Please specify a valid name to build Kraken2 database for host e.g. 'human'!" }
+
+        process KRAKEN2_BUILD {
+            tag "$db"
+            label 'process_high'
+            if (params.save_reference) {
+                publishDir "${params.outdir}/genome", mode: params.publish_dir_mode
+            }
+
+            when:
+            !params.skip_assembly
+
+            output:
+            path "$db" into ch_kraken2_db
+
+            script:
+            db = "kraken2_${params.kraken2_db_name}"
+            ftp = params.kraken2_use_ftp ? "--use-ftp" : ""
+            """
+            kraken2-build --db $db --threads $task.cpus $ftp --download-taxonomy
+            kraken2-build --db $db --threads $task.cpus $ftp --download-library $params.kraken2_db_name
+            kraken2-build --db $db --threads $task.cpus $ftp --build
+            """
+        }
+    }
+} else {
+    exit 1, "NXF_OFFLINE=true or -offline has been set so cannot download files required to build Kraken2 database!"
+}
+
+/*
+ * Filter reads with Kraken2
+ */
+process KRAKEN2 {
+    tag "$db"
+    label 'process_high'
+    publishDir "${params.outdir}/assembly/kraken2", mode: params.publish_dir_mode,
+        saveAs: { filename ->
+                        if (filename.endsWith(".txt")) filename
+                        else params.save_kraken2_fastq ? filename : null
+                }
+    when:
+    !params.skip_kraken2
+
+    input:
+    tuple val(sample), val(single_end), path(reads) from ch_trimmomatic_kraken2
+    path db from ch_kraken2_db
+
+    output:
+    tuple val(sample), val(single_end), path("*.viral*") 
+    path "*.report.txt" into ch_kraken2_report_mqc
+    path "*.host*"
+
+
+    script:
+    pe = single_end ? "" : "--paired"
+    classified = single_end ? "${sample}.host.fastq" : "${sample}.host#.fastq"
+    unclassified = single_end ? "${sample}.viral.fastq" : "${sample}.viral#.fastq"
+    """
+    kraken2 \\
+        --db $db \\
+        --threads $task.cpus \\
+        --unclassified-out $unclassified \\
+        --classified-out $classified \\
+        --report ${sample}.kraken2.report.txt \\
+        --report-zero-counts \\
+        $pe \\
+        --gzip-compressed \\
+        $reads
+    pigz -p $task.cpus *.fastq
     """
 }
 
@@ -1993,6 +2123,7 @@ process get_software_versions {
     snpEff -version > v_snpeff.txt
     echo \$(SnpSift 2>&1) > v_snpsift.txt
     quast.py --version > v_quast.txt
+    kraken2 --version > v_kraken2.txt
     vg version > v_vg.txt
     echo \$(R --version 2>&1) > v_R.txt
     multiqc --version > v_multiqc.txt
@@ -2003,6 +2134,22 @@ process get_software_versions {
 /*
  * STEP 7: MultiQC
  */
+
+ch_cutadapt_mqc = Channel.empty()
+ch_cutadapt_fastqc_mqc = Channel.empty()
+ch_spades_vg_bcftools_mqc = Channel.empty()
+ch_spades_snpeff_mqc = Channel.empty()
+ch_quast_spades_mqc = Channel.empty()
+ch_metaspades_vg_bcftools_mqc = Channel.empty()
+ch_metaspades_snpeff_mqc = Channel.empty()
+ch_quast_metaspades_mqc = Channel.empty()
+ch_unicycler_vg_bcftools_mqc = Channel.empty()
+ch_unicycler_snpeff_mqc = Channel.empty()
+ch_quast_unicycler_mqc = Channel.empty()
+ch_minia_vg_bcftools_mqc = Channel.empty()
+ch_minia_snpeff_mqc = Channel.empty()
+ch_quast_minia_mqc = Channel.empty()
+
 process MULTIQC {
     label 'process_medium'
     publishDir "${params.outdir}", mode: params.publish_dir_mode,
@@ -2038,6 +2185,21 @@ process MULTIQC {
     path ('bcftools/variants/bcftools/*') from ch_bcftools_variants_mqc.collect().ifEmpty([])
     path ('bcftools/variants/snpeff/*') from ch_bcftools_snpeff_mqc.collect().ifEmpty([])
     path ('bcftools/consensus/quast/*') from ch_bcftools_quast_mqc.collect().ifEmpty([])
+    path ('cutadapt/log/*') from ch_cutadapt_mqc.collect().ifEmpty([])
+    path ('cutadapt/fastqc/*') from ch_cutadapt_fastqc_mqc.collect().ifEmpty([])
+    path ('kraken2/*') from ch_kraken2_report_mqc.collect().ifEmpty([])
+    path ('spades/bcftools/*') from ch_spades_vg_bcftools_mqc.collect().ifEmpty([])
+    path ('spades/snpeff/*') from ch_spades_snpeff_mqc.collect().ifEmpty([])
+    path ('spades/quast/*') from ch_quast_spades_mqc.collect().ifEmpty([])
+    path ('metaspades/bcftools/*') from ch_metaspades_vg_bcftools_mqc.collect().ifEmpty([])
+    path ('metaspades/snpeff/*') from ch_metaspades_snpeff_mqc.collect().ifEmpty([])
+    path ('metaspades/quast/*') from ch_quast_metaspades_mqc.collect().ifEmpty([])
+    path ('unicycler/bcftools/*') from ch_unicycler_vg_bcftools_mqc.collect().ifEmpty([])
+    path ('unicycler/snpeff/*') from ch_unicycler_snpeff_mqc.collect().ifEmpty([])
+    path ('unicycler/quast/*') from ch_quast_unicycler_mqc.collect().ifEmpty([])
+    path ('minia/bcftools/*') from ch_minia_vg_bcftools_mqc.collect().ifEmpty([])
+    path ('minia/snpeff/*') from ch_minia_snpeff_mqc.collect().ifEmpty([])
+    path ('minia/quast/*') from ch_quast_minia_mqc.collect().ifEmpty([])
     path ('software_versions/*') from ch_software_versions_yaml.collect()
     path workflow_summary from ch_workflow_summary.collectFile(name: "workflow_summary_mqc.yaml")
 
