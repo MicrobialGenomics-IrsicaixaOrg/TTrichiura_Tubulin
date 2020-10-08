@@ -1863,19 +1863,30 @@ process CUSTOM_CONSENSUS {
     publishDir "${params.outdir}/variants/custom_consensus", mode: params.publish_dir_mode
     
     when:
-    !params.skip_variants
+    !params.skip_variants && params.gff
     
-    input: 
+    input:
     tuple val(sample), val(single_end), path(bam) from ch_markdup_bam_custom_consensus
+    path gff from ch_gff
+    path fasta from ch_fasta
 
     output:
-    path "*.fa"
+    path "*.{fa,fai,faa}"
 
     script:
-    """ 
+    """
     consensusSequence_v2.py ${bam[0]} $params.custom_consensus_thres > ${sample}_custom_consensus.fa
-    """  
+    
+    echo ">AF034219.1" > tmp ### Use Reference accession to process GFF3
+	fgrep -v ">" ${sample}_custom_consensus.fa >> tmp
+	mv tmp ${sample}_custom_consensus.fa
+
+    gffread -W -x ${sample}_consensus_cds.fasta -g ${sample}_custom_consensus.fa $gff
+
+    seqkit translate --quiet ${sample}_consensus_cds.fasta -o ${sample}_consensus_cds.faa
+    """
 }
+
 ////////////////////////////////////////////////////
 /* --                 CODFREQ                  -- */
 ////////////////////////////////////////////////////
